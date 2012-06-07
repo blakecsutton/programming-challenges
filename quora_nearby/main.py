@@ -17,7 +17,10 @@ import sys
 
 def read_input(source):
     first_line = source.readline().strip()
-    descriptors = first_line.split(' ')
+    first_line = first_line.split(' ')
+    
+    num_topics = int(first_line[0])
+    num_questions = int(first_line[1])
     
     # Probably want to put this into a data structure organized by location
     # kd-tree?
@@ -35,12 +38,13 @@ def read_input(source):
         
         # Trim whitespace and split into separate pieces
         line = line.strip().split(' ')
-        
-        if count < descriptors[0]:
+	print("Read in line {} ".format(count) )      
+	print(line) 
+        if count < num_topics:
             # Process topic line
             pass
             
-        elif (count >= descriptors[0] and count < descriptors[1]):
+        elif (count >= num_topics and count < (num_topics + num_questions)): 
             # Process question line
             pass
         else:
