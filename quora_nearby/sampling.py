@@ -1,4 +1,5 @@
 import random
+from operator import itemgetter
 
 # Collection of functions to do sampling and generation of random 2D points
 # Right now it uses a uniform distribution in a square, which is probably not
@@ -18,22 +19,31 @@ def pop_median(data, sample_size, dimension):
   return data.pop()
 
 def get_median(data, sample_size, dimension='x'):
-  """ Calculates the median by randomly selecting sample_size points
-      from the data list and choosing the median value, based on the
+  """ Function that estimates the median of the input list (data)
+      by randomly selecting sample_size points from the list and 
+      finding the median value of that set, based on the
       specified dimension (either 'x' or 'y').
+      
+      The input list (data) is expected to consist of dictionaries
+      containing 'x' and 'y' keys, to represent points in space.
   """
   
-  # First take a random sample of the list to cut down on input size
-  samples = get_samples(data, sample_size)
+  if sample_size == 0:
+    return calculate_median(data, dimension)
   
-  # Index into the list to get the data values for the sampling
-  sample_data = [data[index] for index in samples]
-  
-  # Use lambda functions to alter which field min compares on
-  if dimension == 'y':
-    compare = lambda item: item['y']
-  elif dimension == 'x':
-    compare = lambda item: item['x']
+  if sample_size < len(data):
+    
+    # First take a random sample of the list to cut down on input size
+    samples = get_samples(data, sample_size)
+    
+    # Index into the list to get the data values for the sampling
+    sample_data = [data[index] for index in samples]
+    
+  elif sample_size == len(data):
+    # If you are sampling the entire dataset, dispense with the sampling altogether
+    # and just use a copy of the original dataset
+    samples = range(len(data))
+    sample_data = data[:]
   
   # Now find the median by finding the sample_size/2'th largest element
   # Just use selection sort until you have half the list done
@@ -42,25 +52,34 @@ def get_median(data, sample_size, dimension='x'):
   for i in range(iterations):
     
     # Get the index of the minimum element in the unsorted region
-    smallest = sample_data.index(min(sample_data[i:], key=compare))
+    smallest = sample_data.index(min(sample_data[i:], key=itemgetter(dimension)))
     
     # Swap elements to put the min value at the end of the sorted range
     sample_data[smallest], sample_data[i] = sample_data[i], sample_data[smallest]
     
   display_samples(sample_data)
-  
-  #print("""And the median is: {}, which is at index {} 
-  #         in the original list.""".format(sample_data[iterations - 1],
-  #                                         samples[smallest]))
+  print("And the median on {} is: {}".format(dimension, sample_data[iterations - 1]))
+  print("which is at index {} in the original list.".format(samples[smallest]))
 
   # Return the index in the original data list of the sample's median value 
   # So, to access the actual median value you index into the data list
   return samples[smallest]
 
+def calculate_median(data, dimension='x'):
+  """ Calculate the median directly by copying the input list, sorting,
+      and return the middle element. """
+  
+  copy = data[:]
+  copy.sort(key=itemgetter(dimension))
+  
+  median_index = len(copy) / 2
+  
+  return data.index(copy[median_index])
+
 def sample_square(bottom_left, side_length, quantity):
-  """ Returns a list of points sampled from the square 
-      defined by bottom_left and side_length. 
-      quantity gives the number of points desired. """
+  """ Returns a list of points (each as a dictionary with 'x' and 'y' keys)
+      randomly sampled from the square defined by bottom_left and side_length. 
+      quantity indicates the number of points desired (and the size of the returned list). """
   
   points = []
   
@@ -81,11 +100,19 @@ def sample_square(bottom_left, side_length, quantity):
   return points
 
 def get_samples(data, sample_size):
+  """ Function to randomly sample the provided data, which is expected to be a list.
+      sample_size specifies how many samples to return. There is no replacement, so
+      each sample is guaranteed to be unique.
+      
+      The samples are actually selected by index, so you will need to index into the
+      original list (data) to pull out the actual sample values. 
+      
+      Also, this function always returns a list, even if sample_size is 1. """
   
   # We are sampling with no replacement, so can't have 
   # the sample size greater than the size of the input list.
   if sample_size > len(data):
-    return;
+    raise ValueError("Sample size is greater than size of list to be sampled.")
   
   samples = []
   
@@ -105,8 +132,8 @@ def get_samples(data, sample_size):
   return samples
   
 def display_samples(samples):
-  # Function to print a list of sample points to stdout for piping to
-  # a plotting program
+  """ Function to print a list of sample points to stdout for piping to
+      a plotting program. """
   for sample in samples:
-    print("{} {}".format(sample['x'], sample['y']))
+    print("{0[x]} {0[y]}".format(sample))
 
