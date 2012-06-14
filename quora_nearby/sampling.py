@@ -28,42 +28,51 @@ def get_median(data, sample_size, dimension='x'):
       containing 'x' and 'y' keys, to represent points in space.
   """
   
-  if sample_size == 0:
+  # If sample_size is 0 or bigger than size of the input data, just calculate the median 
+  # directly on the whole list. This is mostly for testing right now.
+  if sample_size == 0 or sample_size >= len(data):
     return calculate_median(data, dimension)
   
-  if sample_size < len(data):
+  # Otherwise use random sampling to estimate the median
+  else:
     
-    # First take a random sample of the list to cut down on input size
-    samples = get_samples(data, sample_size)
-    
-    # Index into the list to get the data values for the sampling
-    sample_data = [data[index] for index in samples]
-    
-  elif sample_size == len(data):
-    # If you are sampling the entire dataset, dispense with the sampling altogether
-    # and just use a copy of the original dataset
-    samples = range(len(data))
-    sample_data = data[:]
+      # Take a random sample of the list to cut down on input size
+      sample_keys = get_samples(data, sample_size)
+
+  # Convert the sample keys into a list of dictionaries with the value and
+  # the index of the value in the original list (not the sample)  
+  samples = []
+  data_key = 'data'
+  for key in sample_keys:
+    sample = {}
+    sample['key'] = key
+    sample['x'] = data[key]['x']
+    sample['y'] = data[key]['y']
+    samples.append(sample)
   
   # Now find the median by finding the sample_size/2'th largest element
   # Just use selection sort until you have half the list done
+  # This could be more clever for sure.
   iterations = sample_size / 2
   
-  for i in range(iterations):
+  for i in range(iterations + 1):
     
     # Get the index of the minimum element in the unsorted region
-    smallest = sample_data.index(min(sample_data[i:], key=itemgetter(dimension)))
+    smallest = samples.index(min(samples[i:], key=itemgetter(dimension)))
     
     # Swap elements to put the min value at the end of the sorted range
-    sample_data[smallest], sample_data[i] = sample_data[i], sample_data[smallest]
-    
-  display_samples(sample_data)
-  print("And the median on {} is: {}".format(dimension, sample_data[iterations - 1]))
-  print("which is at index {} in the original list.".format(samples[smallest]))
-
+    samples[smallest], samples[i] = samples[i], samples[smallest]
+  
+  """
+  print("Sample of {} on a {}-item dataset:".format(sample_size, len(data)))  
+  display_samples(samples)
+  print("And the median on {} is: {}".format(dimension, samples[iterations]))
+  print("which is at index {} in the original list.".format(samples[iterations]['key']))
+  """
+  
   # Return the index in the original data list of the sample's median value 
   # So, to access the actual median value you index into the data list
-  return samples[smallest]
+  return samples[iterations]['key']
 
 def calculate_median(data, dimension='x'):
   """ Calculate the median directly by copying the input list, sorting,
