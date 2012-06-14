@@ -1,6 +1,7 @@
 import sampling
 import math
 import sys
+from operator import itemgetter
 
 class KDTreeNode():
   
@@ -63,38 +64,36 @@ class KDTreeNode():
         self.right_child.parent = self
         
   def nearest(self, key):
+    """ Find the single nearest point to the key. """
     
     # Find the node where the key would be inserted and take that as the starting point
     target = self.search(key)
-    current_min = self.distance(target.key, key)
+    min_so_far = self.distance(target.key, key)
     
     # Then search the kd-tree refining the minimum distance, and 
     # using the normal distance along each axis to choose which branch to expand.
-    better = self.find_nearest(key, current_min)
+    better = self.find_nearest(key, min_so_far)
     
     # If a better node was found, return it
     if better:
       best = better
     else:
       best = target
-      
+
     return best
-  
-  
-  def find_nearest(self, key, current_min):
+
+  def find_nearest(self, key, min_so_far):
     
     # First calculate distance from current node to target point
-    min_distance = current_min
+    current_min = min_so_far
     distance = self.distance(self.key, key)
     result = None
     
     # Adjust running minimum distance if necessary
     if distance < current_min:
       result = self
-      # Or add self to the list of running nearest neighbors
-      min_distance = distance
+      current_min = distance
       
-    
     # Calculate the normal distance from current node to the target,
     # using the axis which applies to the current node
     normal_distance = abs(key[self.axis] - self.key[self.axis])
@@ -102,45 +101,177 @@ class KDTreeNode():
     # If the perpendicular distance to the current node's partition is
     # less than the running minimum distance, then we have to check both
     # branches
-    if normal_distance < min_distance:
+    if normal_distance < current_min:
       
       # Check left branch   
       if self.left_child:
-        candidate = self.left_child.find_nearest(key, min_distance)
+        candidate = self.left_child.find_nearest(key, current_min)
       
         # Adjust minimum
         if candidate:
           distance =  self.distance(candidate.key ,key)
-          if distance < min_distance:
+          if distance < current_min:
             result = candidate
-            min_distance = distance      
+            current_min = distance     
       
       # Check right branch
       if self.right_child:
-        candidate = self.right_child.find_nearest(key, min_distance)
+        candidate = self.right_child.find_nearest(key, current_min)
       
         # Adjust minimum
         if candidate:
           distance =  self.distance(candidate.key ,key)
-          if distance < min_distance:
+          if distance < current_min:
             result = candidate
-            min_distance = distance
-
+            current_min = distance
+  
     else:
       # Otherwise we only have to check one branch
       if key[self.axis] < self.key[self.axis]:
         
         if self.left_child:
-          return self.left_child.find_nearest(key, min_distance)
+          return self.left_child.find_nearest(key, current_min)
           
       else:
         if self.right_child:
-          return self.right_child.find_nearest(key, min_distance)
+          return self.right_child.find_nearest(key, current_min)
     
     # Return the final result at the end
+    return result  
+  
+  def k_nearest(self, key, k):
+    
+    # Find the node where the key would be inserted and take that as the starting point
+    target = self.search(key)
+    min_so_far = self.distance(target.key, key)
+    
+    # Start out list of k-nearest with the first estimate for nearest neighbor.
+    k_nearest = [{'node': target,
+                  'distance': min_so_far}]
+    
+    stats = {'nodes': 0}
+    # Then search the kd-tree refining the minimum distance, and 
+    # using the normal distance along each axis to choose which branch to expand.
+    better = self.find_k_nearest(key, min_so_far, k_nearest, k, stats)
+    print ("Nodes visited: {0[nodes]}".format(stats))
+
+    # We don't care about the best result returned, we have that information in
+    # the list of k nearest neighbors.      
+    k_nearest.sort(key=itemgetter('distance'))
+    return k_nearest
+    
+  def find_k_nearest(self, key, min_so_far, k_nearest, k, stats):
+    
+    stats['nodes'] += 1
+    
+    # First calculate distance from current node to target point
+    current_min = min_so_far
+    distance = self.distance(self.key, key)
+    result = None
+    
+    # Adjust running minimum distance if necessary
+    if distance < current_min:
+      result = self
+      current_min = distance
+      
+      # And add this node to the list of running nearest neighbors
+      new_min = {'node': result, 
+                 'distance': distance}
+      self.insert_min(new_min, k_nearest, k)
+        
+    # If we don't have k points yet or the distance is < max distnace in k_nearest,
+    # add the current node to k_nearest even if it's NOT the minimum
+    elif (len(k_nearest) < k or 
+          distance < max(k_nearest, key=itemgetter('distance'))):
+      
+      new_min = {'node': self, 
+                 'distance': distance}
+      self.insert_min(new_min, k_nearest, k)
+    
+     
+    # Calculate the normal distance from current node to the target,
+    # using the axis which applies to the current node
+    normal_distance = abs(key[self.axis] - self.key[self.axis])
+    
+    # If the perpendicular distance to the current node's partition is
+    # less than the maximum distance in the k nearest neighbors, we might
+    # need to bleed over the partition to replace one of the neighbors.
+    if (normal_distance < current_min):
+      
+      # Check left branch   
+      if self.left_child:
+        candidate = self.left_child.find_k_nearest(key, current_min, k_nearest, k, stats)
+      
+        # If we got back a new minimum-distance node, adjust the running minimum
+        if candidate:
+          distance =  self.distance(candidate.key ,key)
+          if distance < current_min:
+            result = candidate
+            current_min = distance     
+            
+          # Add this node to the list of running nearest neighbors if it qualifies
+          if distance < max(k_nearest, key=itemgetter('distance')):
+            new_min = {'node': candidate, # this used to be result?
+                       'distance': distance}
+            self.insert_min(new_min, k_nearest, k) 
+      
+      # Check right branch
+      if self.right_child:
+        candidate = self.right_child.find_k_nearest(key, current_min, k_nearest, k, stats)
+      
+        # Adjust minimum
+        if candidate:
+          distance =  self.distance(candidate.key ,key)
+          if distance < current_min:
+            result = candidate
+            current_min = distance
+            
+          # And add this node to the list of running nearest neighbors
+          if distance < max(k_nearest, key=itemgetter('distance')):
+            new_min = {'node': candidate, 
+                       'distance': distance}
+            self.insert_min(new_min, k_nearest, k) 
+  
+    else:
+      # Otherwise we only have to check one branch
+      candidate = None
+      if key[self.axis] < self.key[self.axis]:
+        
+        if self.left_child:
+          candidate = self.left_child.find_k_nearest(key, current_min, k_nearest, k, stats)
+          
+      else:
+        if self.right_child:
+          candidate = self.right_child.find_k_nearest(key, current_min, k_nearest, k, stats)
+        
+      if candidate:
+        result = candidate  
+    
+    # Returning the minimum node found here, of if None if we found no minimum better than
+    # the current running minimum
     return result
       
-     
+  def insert_min(self, new_min, min_list, k):
+    """ Function which inserts a new nearest neighbor into the list of 
+        nearest neighbors, ejecting the maximum value if necessary
+        to keep the list size at k.
+    """
+    
+    # First make sure it's not already in the list.
+    if new_min not in min_list:
+    
+      # If adding the new item to the list will result in k items or less,
+      # just insert it.
+      if len(min_list) < k:
+        min_list.append(new_min)
+      else:
+        
+        # Find the item with the maximum distance
+        max_item = max(min_list, key=itemgetter('distance'))
+        max_index = min_list.index(max_item)
+        # And replace it with the new minimum item
+        min_list[max_index] = new_min
+      
   def search(self, key):
     """ Searches the tree to find either the node with the same key or
         or the node that would be the key's parent if it were inserted. 
@@ -165,13 +296,17 @@ class KDTreeNode():
       else:
         # If no right sub-tree, return the current node
         return self
-      
-  def distance(self, first_key, second_key):
-    # Calculate the distance between two points with the Pythagorean Theorem
+  
+  @staticmethod  
+  def distance(first_key, second_key):
+    """ Calculates the squared distance between two points.
+        Since we are only using it for comparison we can save
+        the time to calculate the square root.
+    """
     
-    x_squared = (first_key['x'] - second_key['x']) * (first_key['x'] - second_key['x'])
-    y_squared = (first_key['y'] - second_key['y']) * (first_key['y'] - second_key['y'])
-    distance = math.sqrt(x_squared + y_squared)
+    x_diff = first_key['x'] - second_key['x']
+    y_diff = first_key['y'] - second_key['y']
+    distance = (x_diff * x_diff) + (y_diff * y_diff)
     
     return distance
   
@@ -279,99 +414,23 @@ class KDTree:
       self.root.insert(current, dummy_value)
       
       count += 1
-      print("Count is: {}".format(count))
 
   def nearest(self, key):
     return self.root.nearest(key)
   
+  def k_nearest(self, key, k):
+    return self.root.k_nearest(key, k)
+  
   def search(self, key):
     return self.root.search(key)
+  
+  def check_balance(self, key):
+    """ Function to check how balanced the tree is. 
+        Should return something like the greatest differences in # nodes on one side vs.
+        another?? """
+    pass
   
   def print_tree(self):
     self.root.print_tree()  
 
-def  check_sampling():
-  """ Function to output data for visual checking with xgraph """  
-  
-  # Sample number points randomly on a square of specified origin and size.
-  origin = {'x': 2, 'y': 1}
-  size = 10
-  number = 10
-  # data becomes a list of point dictionaries
-  data = sampling.sample_square(origin, size, number)
-  
-  # Dump the dataset to a file for graphing
-  output_file = open("median.out", 'w')
-  for point in data:
-    output_file.write("{0[x]:f} {0[y]:f}\n".format(point))
-  
-  sample_size = 10
-  # Dump the estimated median as a point
-  sample_median_index = sampling.get_median(data, sample_size, 'x')
-  output_file.write("\n")
-  output_file.write("{0[x]} {0[y]}\n".format(data[sample_median_index]))
-  output_file.write("0 0\n")
-  
-  sample_median_index = sampling.get_median(data, sample_size, 'y')
-  output_file.write("\n")
-  output_file.write("{0[x]} {0[y]}\n".format(data[sample_median_index]))
-  output_file.write("0 0\n\n")
-  
-  output_file.close()
-  
-def check_tree():
-  
-  # Sample number points randomly on a square of specified origin and size.
-  origin = {'x': 2, 'y': 1}
-  size = 10
-  number = 10
-  data = sampling.sample_square(origin, size, number)
-  data_copy = data[:]
-  
-  sampling.display_samples(data)
-  
-  sample_size = 0
-  tree = KDTree(data, sample_size)
-  tree.print_tree()
-  
-  index = 7
-  result = tree.search(data_copy[index])
-  print("Result of searching for ({0[x]},{0[y]}) is: {1}".format(data_copy[index], 
-                                                        result))                                              
-                                                  
-  # Create a test point in the target region for testing nearest neighbor search
-  test_point = sampling.sample_square(origin, size, 1)
-  result = tree.search(test_point[0])
-  print("Result of searching for ({:0.2f},{:0.2f}) is: {}".format(test_point[0]['x'],
-                                                                  test_point[0]['y'],
-                                                                  result))
-  
-  nearest = tree.nearest(test_point[0])
-  print("Result of nearest for ({0[x]:0.2f},{0[y]:0.2f}) is: {1}".format(test_point[0],
-                                                                         nearest))
-  output_file = open("parts.out", 'w')
-  
-  # Dump series representing partition lines to stdout
-  tree.root.draw_tree(origin, {'x': 12, 'y': 11}, output_file)
-  
-  # Dump the search point to the graph as well
-  output_file.write("{0[x]} {0[y]}\n".format(test_point[0]))
-  output_file.write("{0[x]} {0[y]}\n".format(test_point[0]))
-  
-  output_file.close()
-  
-  
-
-#check_sampling()
-check_tree()
-
-  
-  
-  
-  
-  
-  
-  
-  
-  
   
