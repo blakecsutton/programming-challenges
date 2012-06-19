@@ -102,9 +102,12 @@ def sample_square(bottom_left, side_length, quantity):
     x += bottom_left['x']
     y += bottom_left['y']
     
+    value = "Hulk {}".format(point)
+    
     # Add the sample to the list
     points.append({'x': x,
-                   'y': y})
+                   'y': y,
+                   'value': value})
     
   return points
 
