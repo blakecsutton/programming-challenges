@@ -1,3 +1,5 @@
+#!/usr/bin/python
+
 import sampling
 import math
 import sys
@@ -104,14 +106,15 @@ class KDTreeNode():
   def k_nearest(self, query, k, stats):
     """ Find the k nearest points to the key. """
     
+    # Short-circuit
     if k == 1:
-      return nearest(query, stats)
+      result = self.nearest(query, stats)
+      return {'list': [result]}
     
     # Find the node where the key would be inserted and take that as the starting point
     target = self.search(query)
     distance = self.distance(target.point, query)
     
-    stats['nodes'] = 0
     # Change this to a hash table by id later if lists are too slow.
     mins_so_far = {'min_distance': distance,
                    'max_distance': distance,
@@ -119,42 +122,105 @@ class KDTreeNode():
                              'distance': distance}]
                    }
     
-    # We know we'll always get the one nearest neighbor.
-    #
-    # What if we find the nearest neighbor to that result, calculate
-    # its distance from the query, and use that as the max_distance for the next pass?
-    
-    # Try something where we slowly increase search radius until
-    # we find k nearest neighbors?
+    # We slowly increase search radius until
+    # we find k nearest neighbors
     multiplier = 1
     passes = 0
     stat_list = []
     while len(mins_so_far['list']) < k:
       
-      #print("Running k-nearest with max_distance = {}".format(mins_so_far['max_distance']))
+      stats['nodes'] = 0
+      
+      # Catch the case where a query point is exactly on a point in the 
+      # tree and no other candidates were found.
+      mins_so_far['max_distance'] = max(1, mins_so_far['max_distance'])
+      
       mins_so_far['max_distance'] *=  multiplier
       
       # Then search the kd-tree refining the minimum distance, and 
       # using the normal distance along each axis to choose which branch to expand.
       self.find_k_nearest(query, mins_so_far, k, stats)
       
-      multiplier += 2
+      multiplier += .1
       passes += 1
       
-    #print("We looked at {} nodes in {} passes to average out to {} nodes per pass".
-    #      format(stats['nodes'], passes, stats['nodes']/passes))
     stats['passes'] = passes
 
     return mins_so_far
-
+  
+  def k_nearest_linked_records(self, query, k, key_name, stats):
+    
+    # Find the node where the key would be inserted and take that as the starting point
+    target = self.search(query)
+    distance = self.distance(target.point, query)
+    
+    # Change this to a hash table by id later if lists are too slow.
+    mins_so_far = {'min_distance': distance,
+                   'max_distance': distance,
+                   'list': [{'point': target,
+                             'distance': distance}]
+                   }
+    
+    # Set up a dictionary to track unique linked record results.
+    linked_records = {}
+    
+    # We slowly increase search radius until
+    # we find k nearest linked records
+    multiplier = 1
+    stats['nodes'] = 0
+    stats['passes'] = 0
+    stat_list = []
+    num_results = k
+    while len(linked_records) < num_results:
+      
+      # Make passes over the tree, widening the search radius until we
+      # get the number of neighbors we wanted
+      while len(mins_so_far['list']) < k:
+        
+        # Catch the case where a query point is exactly on a point in the 
+        # tree and no other candidates were found.
+        mins_so_far['max_distance'] = max(1, mins_so_far['max_distance'])
+        mins_so_far['max_distance'] *=  multiplier
+        
+        # Then search the kd-tree refining the minimum distance, and 
+        # using the normal distance along each axis to choose which branch to expand.
+        self.find_k_nearest(query, mins_so_far, k, stats)
+        stats['passes'] += 1
+        
+        multiplier += .1
+        #print("  Bumping up max_distance multiplier to {}".format(multiplier))
+      
+      # Now go through the list of nearest neighbors and process the linked records.
+      num_linked = len(linked_records)
+      for result in mins_so_far['list']:
+      
+        # Get the lists of linked records (might be length zero)
+        records = result['point'].point['value'][key_name]
+          
+        # Put question id's in dictionary to eliminate duplicate id's
+        for record_id in records:
+          if record_id not in linked_records:
+            linked_records[record_id] = result['distance']
+      
+      # If we didn't find any new questions, increase k
+      if num_linked <= len(linked_records):
+        k *= 2
+        #print("  Bumping up k to {}".format(k))
+    
+    # Reformat dictionary into a list for sorting.
+    record_list = []
+    for key, value in linked_records.iteritems():
+      record_list.append({'id': key,
+                          'distance': value})
+      
+    mins_so_far[key_name] = record_list
+    return mins_so_far
+  
   def insert_min(self, new_min, mins_so_far, k):
     """ Function which inserts a new nearest neighbor into the list of 
         nearest neighbors, ejecting the maximum value if necessary
         to keep the list size at k.
-    """
-    
-    # Consider updating mins to be a hash table by id?
-    
+    """    
     # First make sure it's not already in the list.
     if new_min not in mins_so_far['list']:   
       
@@ -188,11 +254,6 @@ class KDTreeNode():
         max_point = max(mins_so_far['list'],key=itemgetter('distance'))
         mins_so_far['max_distance'] =  max_point['distance']    
       
-      """  
-      print("Min_list has been updated to:")
-      for count, point in enumerate(mins_so_far['list']):
-            print("  {0} - ({1[point]}), distance {1[distance]:0.2f}".format(count, point))
-      """
 
   def find_k_nearest(self, query, mins_so_far, k, stats):
     
@@ -206,7 +267,8 @@ class KDTreeNode():
       distance = self.distance(self.point, query)
       
       # Adjust running minimum and add to k nearest neighbors if necessary
-      if distance < mins_so_far['max_distance']:
+      if (distance < mins_so_far['max_distance'] or
+         len(mins_so_far['list']) < k):
         
         self.insert_min({'point': self,
                          'distance': distance},
@@ -294,6 +356,10 @@ class KDTreeNode():
     y_diff = first_point['y'] - second_point['y']
     distance = math.sqrt((x_diff * x_diff) + (y_diff * y_diff))
     
+    # If distance is < epsilon, just return 0
+    epsilon = .001
+    distance = max(0, distance - epsilon)
+
     return distance
   
   def __str__(self):
@@ -383,6 +449,7 @@ class KDTree:
   
   dimensions = None
   number_nodes = 0
+  leaf_nodes = 0
   
   def __init__(self, data, dimensions):
     """ Initializes the kd-tree structure using input data, which is expected to
@@ -404,28 +471,10 @@ class KDTree:
     
     self.root = self.split_and_add(data, sorted_by)
     
-  def split_and_add(self, data, sublists):
-    """ Inputs: 
-          data - the list of points in dimensional space
-          sublists - a k-length list (k = #dimensions) of the data points
-                     sorted by dimension k, as indexes into data.
-                     All are equal length.
-          dimension - the dimension which the node added by this invocation
-                      will split on. Alternates for each level of the tree.
-    """ 
-    
-    # Sanity check
-    if len(sublists[0]) != len(sublists[1]):
-      print("The sublists are different sizes, something is wrong!")
-      
-    # Base case: none or 1 item in the sublists.
-    size = len(sublists[0])
-    if size == 0:
-      return None;
-    elif size == 1:
-      # If there's 1 item in the sublists then create a leaf node and return it.
-      self.number_nodes += 1
-      return KDTreeNode(point=data[sublists[0][0]])
+  def get_splitting_dimension(self, data, sublists):
+    """ Given d lists of n items (sublists),
+        this function returns the dimension which has the highest spread.
+        The dimension is returned as an index into the sublists list. """
     
     # Find which dimension has the widest spread
     spreads = []
@@ -444,8 +493,33 @@ class KDTree:
       spreads.append(spread)
 
     # Pull out the index of the dimension with the max spread,
-    # which is the dimensions we will be splitting on for this node.
+    # which is the dimension we want to partition on.
     dimension = max(range(len(spreads)), key=lambda k: spreads[k])
+    
+    return dimension    
+    
+  def split_and_add(self, data, sublists):
+    """ Inputs: 
+          data - the list of points in dimensional space
+          sublists - a k-length list (k = #dimensions) of the data points
+                     sorted by dimension k, as indexes into data.
+                     All are equal length.
+          dimension - the dimension which the node added by this invocation
+                      will split on. Alternates for each level of the tree.
+    """ 
+        
+    # Base case: none or 1 item in the sublists.
+    size = len(sublists[0])
+    if size == 0:
+      return None;
+    elif size == 1:
+      # If there's 1 item in the sublists then create a leaf node and return it.
+      self.number_nodes += 1
+      self.leaf_nodes += 1
+      return KDTreeNode(point=data[sublists[0][0]])
+    
+    # Choose the dimension with the largest spread to split on
+    dimension = self.get_splitting_dimension(data, sublists)
     
     # We are indexing into the sublist sorted by this dimension so we know
     # where the median is and can then index into the original data list with it.
@@ -497,12 +571,20 @@ class KDTree:
     
     # Return the reference to the created node/subtree
     return node  
-    
   
-  def check_balance(self, key):
-    """ Function to check how balanced the tree is. 
-        Should return something like the greatest differences in # nodes on one side vs.
-        another?? """
-    pass
+  def k_nearest(self, query, k, stats):
+    # Make sure k is no higher than the total number of points in the tree
+    max_possible_results = min(k, self.leaf_nodes)
+    
+    return self.root.k_nearest(query, max_possible_results, stats)
+  
+  def k_nearest_linked_records(self, query, k, 
+                               key_name, max_possible_records,
+                               stats):
+    # Make sure k is no higher than the number of unique linked records
+    max_possible_results = min(k, max_possible_records)
+    return self.root.k_nearest_linked_records(query, max_possible_results, 
+                                             key_name, stats)
+
 
   
