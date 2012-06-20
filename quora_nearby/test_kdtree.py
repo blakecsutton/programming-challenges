@@ -1,7 +1,10 @@
+#!/usr/bin/python
+
 import kdtree
 import sampling
 from operator import itemgetter
 from collections import Counter
+import time
 
 def  check_sampling():
   """ Function to output data for visual checking with xgraph """  
@@ -116,15 +119,18 @@ def stress_test():
   print("Test points created.")
   
   print("Start nearest-neighbor queries...")
+  t0 = time.clock()
   stat_list = []
   for death in test_points:
     
     # Find the single nearest neighbor to the query point
     result = tree.root.nearest(death, stats)
     stat_list.append(stats['nodes'])
+  t1 = time.clock()
+  time_elapsed = t1 - t0
   
   # Print some stats to give an idea of the number of nodes traversed.
-  print("Queries finished.".format(queries))
+  print("Queries finished ({} s).".format(time_elapsed))
   
   stat_list.sort()
   print("In {} NN queries, the number nodes visited was:".format(queries))
@@ -135,6 +141,7 @@ def stress_test():
   
   k = 10
   print("Starting {}-nearest-neighbor queries...".format(k))
+  t0 = time.clock()
   stat_list = []
   pass_list = []
   for death in test_points:
@@ -144,8 +151,9 @@ def stress_test():
     stat_list.append(stats['nodes'])
     pass_list.append(stats['passes'])
 
+  time_elapsed = time.clock() - t0
   # Print some stats to give an idea of the number of nodes traversed.
-  print("Queries finished.".format(queries))
+  print("Queries finished ({} s)".format(time_elapsed))
   
   pass_list.sort()
   print("In {} {}NN queries, the number passes was:".format(queries, k))
@@ -242,8 +250,8 @@ def check_tree():
   
   # Sample number points randomly on a square of specified origin and size.
   origin = {'x': 2, 'y': 1}
-  side_length = 1000
-  number = 100
+  side_length = 100
+  number = 10
   data = sampling.sample_square(origin, side_length, number)
   
   print("Building a 2d-tree from {number} points sampled on a square of size {size}...".
