@@ -184,17 +184,87 @@ def generate_data(config, output_filename="stress_test.in"):
 def generate_max_test_data():
   """ Generate test data for quora's limits and dumps it to a file. """
   
-  config = {'num_topics': 10000,
-            'num_questions': 1000,
-            'num_queries': 10000,
+  config = {'num_topics': 100,
+            'num_questions': 10,
+            'num_queries': 10,
             'max_topics_per_question': 10,
             'max_results': 10,
-            'side_length': 1000000,
+            'side_length': 1000,
             'origin': {'x': 0,
                        'y': 0}}
    
-  output_name = "test_{0[num_topics}_{0[num_questions}_{0[num_queries}.in".format(config)         
-  test_kdtree.generate_data(config, output_name)
+  output_name = "test_{0[num_topics]}_{0[num_questions]}_{0[num_queries]}.in".format(config)         
+  generate_data(config, output_name)
+  
+def test_bruteforce_verbose():
+  """ Processes the queries and displays output for checking accuracy, instead
+      of just printing out query results. Very verbose, so running this on 
+      more than 25 topics or queries is a mistake. """
+  
+  logging.info("Reading from sys.stdin...")
+  data = read_input(sys.stdin)
+  
+  show_topics(data['topics'])  
+  show_queries(data['queries'])  
+  
+  # Nature of the dataset
+  logging.info("There are {} topics, {} questions, and {} queries.".
+        format(len(data['topics']), len(data['questions']), len(data['queries'])))
+  logging.info("There are {} topics that have no questions.".
+        format(data['num_topics_without_questions']))
+  logging.info("There are {} questions that have no topics.".
+        format(data['num_questions_without_topics']))    
+
+  for query in data['queries']:
+      
+    # Pull out the number of results desired for the query.
+    num_results = query['count']
+    
+    logging.info("Query: The {query[count]} {type}'s nearest to ({query[x]:0.2f}, {query[y]:0.2f})".
+          format(query=query, type=query['type']))    
+    
+    # Topic queries are straight up nearest neighbor queries.
+    if query['type'] == 't':
+      
+      nearest = data['topics'].values()
+      nearest.sort(key=lambda k: kdtree.KDTreeNode.distance(k, query) )
+      distances = [kdtree.KDTreeNode.distance(k, query) for k in nearest]
+      # Just print out the topics
+      for count, result in enumerate(nearest[:num_results]):
+        logging.info("  Topic {0} - ({1}), distance {2:0.2f}".format(count, result['value']['id'], distances[count]))
+      
+    # Otherwise search is more complicated because we care about number of 
+    # records associated with the nearest point(s)
+    elif query['type'] == 'q':
+       
+      # We're sorting the dictionary of topics with 1 or more questions, so
+      # we know every topic will yield at least one question.
+      nearest = data['topics_with_questions'].values()
+      nearest.sort(key=lambda k: kdtree.KDTreeNode.distance(k, query) )
+      distances = [kdtree.KDTreeNode.distance(k, query) for k in nearest]
+      
+      # Now all we have to do is aggregate question id's, ignoring duplicates.
+      num_questions = 0
+      # Keep a separate dictionary for checking duplicates because it doesn't
+      # preserve the sorted order.
+      dupes = {}
+      questions = []
+      for topic in nearest:
+        
+        # Go through the list of question's associated with each topic,
+        # adding to the results only if it hasn't previously appeared.
+        for question in topic['value']['questions']:
+          
+          if question not in dupes:
+            dupes[question] = True
+            questions.append(str(question))
+            
+        # Break early if we have enough topics
+        if len(questions) >= num_results:
+          break;
+        
+      for count, result in enumerate(questions[:num_results]):
+        logging.info("  Question {1}, distance {2:0.2f}".format(count, result, distances[count]))
         
 def process_queries_brute_force(data):
  """ Function which finds the ids of the nearest neighbors using brute force.
@@ -212,10 +282,12 @@ def process_queries_brute_force(data):
     # Topic search is just a straightforward nearest neighbors query.
     if query['type'] == 't':
       
-      # Just pull the values from the topics dictoinary and sort by distance
+      # Just pull the values from the topics dictionary and sort by distance
       # from the query point.
       nearest = data['topics'].values()
       nearest.sort(key=lambda k: kdtree.KDTreeNode.distance(k, query) )
+      
+      
       
       # Re-format for output and print to stdout
       results = [str(result['value']['id']) for result in nearest]
@@ -274,5 +346,6 @@ def brute_force():
   logging.info("Queries finished ({} s)".format(t1-t0))
 
   
-logging.basicConfig(filename='quora_nearby_test.log',level=logging.INFO)
+logging.basicConfig(filename='quora_nearby_tree_test.log',level=logging.INFO)
+#generate_max_test_data()
 test_verbose()
