@@ -3,6 +3,7 @@
 from operator import itemgetter
 from collections import Counter
 import time
+import random
 import kdtree
 
 def sample_square(bottom_left, side_length, quantity):
@@ -199,7 +200,7 @@ def check_nearest_accuracy():
                          'y': point['y'],
                          'distance': distance})
       
-    # Now sort the list of poitns by distance from the test point and pull out
+    # Now sort the list of points by distance from the test point and pull out
     # the point with minimum distance
     all_points.sort(key=itemgetter('distance'))
     real_nearest = all_points[0]
@@ -229,7 +230,96 @@ def check_nearest_accuracy():
   print("  {} -> average".format(sum(stat_list)/len(stat_list)))
   print("  {} -> median".format(stat_list[len(stat_list)/2]))
   print("  {} -> max".format(stat_list[-1]))
+
+def check_k_nearest_accuracy():
+  """ This is a function for verifying the accuracy of results by
+      calculating the actual nearest neighbors by brute force.
+      Needless to say this is for debugging only. """
+      
+  # Sample number points randomly on a square of specified origin and size.
+  origin = {'x': 0, 'y': 0}
+  size = 1000000
+  number = 10000
+  k = 10
+  data = sample_square(origin, size, number)
+
+  print("Building a 2d-tree from {number} points sampled on a square of size {size}...".
+        format(size=size, number=number))
+  dimensions = ['x', 'y']
+  tree = kdtree.KDTree(data, dimensions)
+
+  print("Tree constructed, there are {} total nodes.".format(tree.number_nodes))
   
+  stats = {'nodes': 0}
+  queries = 100
+  k = 10
+  
+  print("Randomly generating {} test points for querying the tree...".format(queries))
+  test_points = sample_square(origin, size, queries)
+  
+  print("Test points created.")
+  
+  print("Start queries...")
+  stat_list = []
+  result_list = []
+  stats = {}
+  for test_point in test_points:
+    
+    # Find the k nearest neighborsto the query point
+    k_nearest = tree.k_nearest(test_point, k, stats)
+    
+    # Now calculate the actual distances of each point from the target
+    # for the purpose of testing accuracy
+    all_points = []
+    for point in data:
+      distance = kdtree.KDTreeNode.distance(point, test_point)
+      all_points.append({'x': point['x'],
+                         'y': point['y'],
+                         'distance': distance})
+      
+    # Now sort the list of points by distance from the test point and pull out
+    # the point with minimum distance
+    all_points.sort(key=itemgetter('distance'))
+    real_nearest = all_points[:k]
+
+    # Mark whether the result was correct or not in the result_list. So
+    # if result_list[4] is false it means the nearest calculation was wrong for
+    # test_points[4]
+    # The == operator should work here because the numbers are pulled/calculated
+    # in exactly the same way.
+    for index, neighbor in enumerate(k_nearest['list']):
+      correct = (real_nearest[index]['x'] == neighbor['point'].point['x'] and
+                 real_nearest[index]['y'] == neighbor['point'].point['y'] and
+                 real_nearest[index]['distance'] == neighbor['distance'])
+      # Fail out on first non-match.
+      if not correct:
+        break;
+
+    result_list.append(correct)
+    
+    if not correct:
+      # Print results if they don't match.
+      print("Bruteforce results: ")
+      
+      for index, result in enumerate(real_nearest):
+        print("{0}: {1[x]:0.2f}, {1[y]:0.2f}, distance {1[distance]:0.2f}".
+              format(index, result))   
+      
+      print("Kdtree results: ")
+     
+      for index, neighbor in enumerate(k_nearest['list']):
+        print("{0}: {1[x]:0.2f}, {1[y]:0.2f}, distance {2:0.2f}".
+              format(index, neighbor['point'].point,  neighbor['distance']))
+
+    
+
+  # Print some stats to give an idea of the number of nodes traversed.
+  print("Queries and testing finished.".format(queries))
+  
+  frequencies = Counter(result_list)
+  print("In {} queries, {} were correct and {} were incorrect.".
+        format(queries, frequencies[True], frequencies[False]))
+
 
   
 def check_tree():
@@ -330,8 +420,8 @@ if __name__ == "__main__":
   
   
   #check_tree()
-  #check_nearest_accuracy()
-  stress_test()
+  check_k_nearest_accuracy()
+  #stress_test()
   
   
   
