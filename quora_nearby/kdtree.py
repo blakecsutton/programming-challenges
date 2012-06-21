@@ -152,13 +152,14 @@ class KDTreeNode():
       # Then search the kd-tree refining the minimum distance, and 
       # using the normal distance along each axis to choose which branch to expand.
       self.find_k_nearest(query, mins_so_far, k, stats)
-      mins_so_far['list'].sort(key=itemgetter('distance'))
       
       multiplier += .1
       passes += 1
-      
+    
     stats['passes'] = passes
-
+    
+    mins_so_far['list'].sort(key=itemgetter('distance'))
+    
     return mins_so_far
   
   def k_nearest_linked_records(self, query, k, key_name, stats):
@@ -259,18 +260,23 @@ class KDTreeNode():
           mins_so_far['max_distance'] = new_min['distance']
 
       else:
-        
-        # Find the item with the maximum distance
+         
+        # Find the index of the item with the maximum distance
         max_index = max(range(len(mins_so_far['list'])), 
                         key=lambda k: mins_so_far['list'][k]['distance'])
         
-        # And replace it with the new minimum item
-        mins_so_far['list'][max_index] = new_min
+        # Only replace the item with maximum distance if our new item has 
+        # a lower distance than it. Because the maximum distance is not necessarily
+        # the distance of the maximum point in the list, but is more like a search radius.
+        if new_min['distance'] < mins_so_far['list'][max_index]['distance']: 
         
-        # Since we kicked out the maximum element max has to be
-        # be recalculated at this point.
-        max_point = max(mins_so_far['list'],key=itemgetter('distance'))
-        mins_so_far['max_distance'] =  max_point['distance']    
+          # And replace it with the new minimum item
+          mins_so_far['list'][max_index] = new_min
+          
+          # Since we kicked out the maximum element max has to be
+          # be recalculated at this point.
+          max_point = max(mins_so_far['list'],key=itemgetter('distance'))
+          mins_so_far['max_distance'] =  max_point['distance']    
       
   def find_k_nearest(self, query, mins_so_far, k, stats):
     """ This is a function to find the k nearest neighbors to the
@@ -297,13 +303,12 @@ class KDTreeNode():
       distance = self.distance(self.point, query)
       
       # Adjust running minimum and add to k nearest neighbors if necessary
-      if (distance < mins_so_far['max_distance'] or
-         len(mins_so_far['list']) < k):
+      if (distance < mins_so_far['max_distance']):
         
         self.insert_min({'point': self,
                          'distance': distance},
-                        mins_so_far, 
-                        k)
+                         mins_so_far, 
+                         k)
 
     # If there's only a right child, search that branch 
     elif not self.left_child:
