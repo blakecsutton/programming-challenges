@@ -1,9 +1,13 @@
 #!/usr/bin/python
 
+""" test_kdtree.py: test functions for kdtree.py, a kd-tree data structure.
+"""
+
 from operator import itemgetter
 from collections import Counter
 import time
 import random
+import sys
 import kdtree
 
 def sample_square(bottom_left, side_length, quantity):
@@ -32,7 +36,6 @@ def sample_square(bottom_left, side_length, quantity):
     
   return points
 
-  
 def partitions_to_file(tree, target, 
                        min_point, max_point, 
                        output_filename="kdtree_parts.out"):
@@ -79,7 +82,6 @@ def searchpoints_to_file(targets, output_filename="search.out"):
     
   output_file.close()  
   
-
 def stress_test():
   """ This is a function to give an idea of the order of magnitude of running time
       on large inputs. """
@@ -161,6 +163,8 @@ def check_nearest_accuracy():
       calculating the actual nearest neighbors by brute force.
       Needless to say this is for debugging only. """
       
+  print("Testing the accuracy of nearest neighbor results...")
+      
   # Sample number points randomly on a square of specified origin and size.
   origin = {'x': 0, 'y': 0}
   size = 1000000
@@ -235,13 +239,16 @@ def check_k_nearest_accuracy():
   """ This is a function for verifying the accuracy of results by
       calculating the actual nearest neighbors by brute force.
       Needless to say this is for debugging only. """
-      
+        
   # Sample number points randomly on a square of specified origin and size.
   origin = {'x': 0, 'y': 0}
   size = 1000000
   number = 10000
   k = 10
   data = sample_square(origin, size, number)
+  
+  print("Testing the accuracy of {} nearest neighbors results...")
+
 
   print("Building a 2d-tree from {number} points sampled on a square of size {size}...".
         format(size=size, number=number))
@@ -252,7 +259,6 @@ def check_k_nearest_accuracy():
   
   stats = {'nodes': 0}
   queries = 100
-  k = 10
   
   print("Randomly generating {} test points for querying the tree...".format(queries))
   test_points = sample_square(origin, size, queries)
@@ -319,8 +325,6 @@ def check_k_nearest_accuracy():
   frequencies = Counter(result_list)
   print("In {} queries, {} were correct and {} were incorrect.".
         format(queries, frequencies[True], frequencies[False]))
-
-
   
 def check_tree():
   """ This is a function for testing the accuracy of results. """
@@ -415,13 +419,23 @@ def check_tree():
   
   searchpoints_to_file(test_points)
 
-  
 if __name__ == "__main__":  
   
-  
-  #check_tree()
-  check_k_nearest_accuracy()
-  #stress_test()
+  if len(sys.argv) > 1:
+    choice = sys.argv[1]
+    if choice == "showtree":
+      check_tree()
+    elif choice == "accuracy":
+      check_nearest_accuracy()
+      check_k_nearest_accuracy()
+    elif choice == "stresstest":
+      print("hmm?")
+      stress_test()
+    else:
+      "Command line argument not recognized."
+  else:
+    print("Command line argument required: either showtree, accuracy, or stresstest.")
+    
   
   
   
