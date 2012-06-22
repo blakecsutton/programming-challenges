@@ -1,5 +1,25 @@
 #!/usr/bin/python
 
+"""
+  kdtree.py: a simple kd-tree class (only tested with two dimensions).
+  
+  This is a class for a space-partitioning data structure (a kd-tree KDTree), 
+  which is a binary tree made up of KDTreeNode's.
+  
+  All data points are stored in leaves, and internal nodes (including the root
+  if there is more than one point in the tree) are partitions. 
+  
+  To build the tree, I use a sublist partitioning approach where two copies of
+  the initial input list are made and each sorted on a different dimension.
+  Then at each step the dimension with the greatest spread is picked as the splitting
+  plane and the two lists are each split into two sub-lists above and below the
+  splitting value. This can be done in O(n) time because the list corresponding to 
+  the splitting dimension is already sorted and the other dimension can be partitioned
+  into two lists by passing over each element and comparing to the splitting value.
+  
+  See http://en.wikipedia.org/wiki/K-d_tree#cite_note-1
+"""
+
 import math
 import sys
 from operator import itemgetter
