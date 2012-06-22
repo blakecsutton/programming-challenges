@@ -134,9 +134,8 @@ class KDTreeNode():
                              'distance': distance}]
                    }
     
-    # We slowly increase search radius until
+    # We increase search radius until
     # we find k nearest neighbors
-    multiplier = 1
     passes = 0
     stat_list = []
     while len(mins_so_far['list']) < k:
@@ -146,14 +145,12 @@ class KDTreeNode():
       # Catch the case where a query point is exactly on a point in the 
       # tree and no other candidates were found.
       mins_so_far['max_distance'] = max(1, mins_so_far['max_distance'])
-      
-      mins_so_far['max_distance'] *=  multiplier
+      mins_so_far['max_distance'] *=  2
       
       # Then search the kd-tree refining the minimum distance, and 
       # using the normal distance along each axis to choose which branch to expand.
       self.find_k_nearest(query, mins_so_far, k, stats)
-      
-      multiplier += .1
+
       passes += 1
     
     stats['passes'] = passes
@@ -163,6 +160,14 @@ class KDTreeNode():
     return mins_so_far
   
   def k_nearest_linked_records(self, query, k, key_name, stats):
+    
+    # Short-circuit to nearest if k is 1
+    if k == 1:
+      result = self.nearest(query, stats)
+      records = result['point'].point['value'][key_name]
+      return {key_name: [{'id': records[0],
+                          'distance': result['distance']}]}
+    
     
     # Instead of the number of nodes found, what we care about is
     # the number of unique linked records found
@@ -182,9 +187,8 @@ class KDTreeNode():
     record_table = {}
     linked_records = []
     
-    # We slowly increase search radius until
+    # We increase search radius until
     # we find k nearest linked records
-    multiplier = 1
     stats['nodes'] = 0
     stats['passes'] = 0
     stat_list = []
@@ -198,14 +202,13 @@ class KDTreeNode():
         # Catch the case where a query point is exactly on a point in the 
         # tree and no other candidates were found.
         mins_so_far['max_distance'] = max(1, mins_so_far['max_distance'])
-        mins_so_far['max_distance'] *=  multiplier
+        # Double the search radius
+        mins_so_far['max_distance'] *=  2
         
         # Then search the kd-tree refining the minimum distance, and 
         # using the normal distance along each axis to choose which branch to expand.
         self.find_k_nearest(query, mins_so_far, k, stats)
         stats['passes'] += 1
-        
-        multiplier += .1
       
       # Now go through the list of nearest neighbors and process the linked records.
       num_linked = len(linked_records)
@@ -214,16 +217,17 @@ class KDTreeNode():
       
         # Get the lists of linked records (might be length zero)
         records = result['point'].point['value'][key_name]
+        records.sort()
           
         # Put question id's in dictionary to eliminate duplicate id's
         for record_id in records:
           if record_id not in record_table:
             record_table[record_id] = result['distance']
             linked_records.append(record_id)
-          
-      # If we didn't find any new questions, increase k
-      if num_linked <= len(linked_records):
-        k *= 2
+      
+      # Check if any more unique records were found.
+      if num_linked < len(linked_records):
+        k += (num_results - len(linked_records))
         #print("  Bumping up k to {}".format(k))
     
     # Reformat dictionary into a list for sorting.
