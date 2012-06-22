@@ -1,5 +1,9 @@
 #!/usr/bin/python
 
+""" test_main.py: testing function for main.py
+
+"""
+
 import sys
 import random
 import time
@@ -184,12 +188,12 @@ def generate_data(config, output_filename="stress_test.in"):
 def generate_max_test_data():
   """ Generate test data for quora's limits and dumps it to a file. """
   
-  config = {'num_topics': 100,
-            'num_questions': 10,
-            'num_queries': 10,
+  config = {'num_topics': 10000,
+            'num_questions': 1000,
+            'num_queries': 10000,
             'max_topics_per_question': 10,
             'max_results': 10,
-            'side_length': 1000,
+            'side_length': 1000000,
             'origin': {'x': 0,
                        'y': 0}}
    
@@ -310,6 +314,8 @@ def process_queries_brute_force(data):
       questions = []
       for topic in nearest:
         
+        topic['value']['questions'].sort()
+        
         # Go through the list of question's associated with each topic,
         # adding to the results only if it hasn't previously appeared.
         for question in topic['value']['questions']:
@@ -345,7 +351,7 @@ def brute_force():
   t1 = time.clock()
   logging.info("Queries finished ({} s)".format(t1-t0))
 
-  
-logging.basicConfig(filename='quora_nearby_tree_test.log',level=logging.INFO)
-#generate_max_test_data()
-test_verbose()
+# Log some timing for comparison
+logging.basicConfig(filename='quora_nearby_test.log',level=logging.INFO)
+# Run on the input to produce results in the same format as main.py, for comparison.
+brute_force()
