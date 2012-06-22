@@ -1,5 +1,33 @@
 #!/usr/bin/python
 
+"""
+    main.py: a response to Quora's nearby programming challenge.
+    
+    This is a collection of functions for the Quora nearby programming challenge
+    at http://www.quora.com/about/challenges. The object is to process queries to
+    find the k nearest topics (or questions, where questions are associated with 0 or 
+    more topics) to a two-dimensional point.
+    
+    To use, pipe in an input file when running this file from the command line.
+    If you pass the -log switch, progress will be logged to quora_nearby.log.
+    The results of queries are printed to stdout as lists of id's, one query
+    per line.
+    
+    To generate the query results, I parse the input and build two kd-trees
+    of topic points, one with all the topic points and one which only has
+    topic points with at least one associated question.
+    
+    To find the k nearest neighbors, I used the nearest neighbor algorithm
+    while saving up to k previous estimates for the nearest neighbors.
+    Then branches are pruned by checking their partition against the current
+    search radius (a function of the distance of the farthest nearest neighbor). 
+    With this approach all neighbors returned are guaranteed to be  the nearest, 
+    but not all k nearest neighbors may appear in a given 
+    radius, so it makes multiple passes (doubling the search radius each time)
+    until the k nearest neighbors are found.
+
+"""
+
 import sys
 import time
 import logging
